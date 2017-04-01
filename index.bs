@@ -1,10 +1,18 @@
+<style>
+.proposed {
+  background-color:pink;
+}
+.idl-constructor {
+  display: inline-block;
+}
+</style>
 <pre class='metadata'>
 Title: Intersection Observer
 Status: ED
 ED: https://github.com/WICG/IntersectionObserver/
 Shortname: intersection-observer
-Level: 1
-Editor: Michael Blain, Google, mpb@google.com
+Level: 2 (proposed)
+Editor: Stefan Zager, Google, szager@chromium.org
 Abstract: This specification describes  an API that can be used to understand the visibility and position of DOM elements ("targets") relative to a containing element or to the top-level viewport ("root"). The position is delivered asynchronously and is useful for understanding the visibility of elements and implementing pre-loading and deferred loading of DOM content.
 Group: webperf
 Repository: WICG/IntersectionObserver
@@ -182,11 +190,6 @@ being observed could have a different set of attributes to filter for. For
 track multiple targets using the same set of options; or they may use a different
 observer for each tracked target.
 
-{{IntersectionObserverInit/rootMargin}} or {{threshold}} values for each
-<a>target</a> seems to introduce more complexity without solving additional
-use-cases. Per-{{observe()}} options could be provided in the future if V2
-introduces a need for it.
-
 <pre class="idl">
 [Constructor(IntersectionObserverCallback callback, optional IntersectionObserverInit options),
  Exposed=Window]
@@ -194,6 +197,7 @@ interface IntersectionObserver {
 	readonly attribute Element? root;
 	readonly attribute DOMString rootMargin;
 	readonly attribute sequence&lt;double> thresholds;
+	[proposed] readonly attribute boolean trackVisibility;
 	void observe(Element target);
 	void unobserve(Element target);
 	void disconnect();
@@ -220,15 +224,17 @@ interface IntersectionObserver {
 		7. Sort |thresholds| in ascending order.
 		8. If |thresholds| is empty, append <code>0</code> to |thresholds|.
 		9. Set |this|.|thresholds| to |thresholds|.
-		10. Return |this|.
+		10. <span class="proposed">Set |this|.|trackVisibility| to |options|.|trackVisibility|.</span>
+		11. Return |this|.
 	: <dfn>observe(target)</dfn>
 	::
 		1. If |target| is in |this|'s internal {{[[ObservationTargets]]}} slot,
 			return.
 		2. Let |intersectionObserverRegistration| be
 			an {{IntersectionObserverRegistration}} record
-			with an {{IntersectionObserverRegistration/observer}} property set to |this|
-			and a {{IntersectionObserverRegistration/previousThresholdIndex}} property set to <code>-1</code>.
+			with an {{IntersectionObserverRegistration/observer}} property set to |this|;
+			a {{IntersectionObserverRegistration/previousThresholdIndex}} property set to <code>-1</code>;
+			<span class="proposed">and a {{IntersectionObserverRegistration/previousVisibility}} property set to <code>true</code></span>.
 		3. Append |intersectionObserverRegistration|
 			to |target|'s internal {{[[RegisteredIntersectionObservers]]}} slot.
 		4. Add |target| to |this|'s internal {{[[ObservationTargets]]}} slot.
@@ -291,6 +297,10 @@ interface IntersectionObserver {
 		of the thresholds are crossed for that target.
 		If no |options|.{{IntersectionObserverInit/threshold}} was provided to the
 		{{IntersectionObserver}} constructor, the value of this attribute will be [0].
+	: <span class="proposed"><dfn>trackVisibility</dfn>
+	::
+		<span class="proposed">A boolean indicating whether this {{IntersectionObserver}} will track
+		changes in a target's <a>visibility</a></span></span>.
 </div>
 
 The <dfn for="IntersectionObserver">intersection root</dfn>
@@ -367,6 +377,7 @@ interface IntersectionObserverEntry {
 	readonly attribute DOMRectReadOnly boundingClientRect;
 	readonly attribute DOMRectReadOnly intersectionRect;
 	readonly attribute boolean isIntersecting;
+	[proposed] readonly attribute boolean isVisible;
 	readonly attribute double intersectionRatio;
 	readonly attribute Element target;
 };
@@ -377,6 +388,7 @@ dictionary IntersectionObserverEntryInit {
 	required DOMRectInit boundingClientRect;
 	required DOMRectInit intersectionRect;
 	required boolean isIntersecting;
+	[proposed] required boolean isVisible;
 	required double intersectionRatio;
 	required Element target;
 };
@@ -393,25 +405,28 @@ dictionary IntersectionObserverEntryInit {
 		each of {{IntersectionObserverEntry/target}}'s ancestors' clip
 		rects (up to but not including {{IntersectionObserver/root}}),
 		intersected with the <a>root intersection rectangle</a>.
-		This value represents the portion of
-		{{IntersectionObserverEntry/target}} actually visible
+		This value represents the unclipped portion of {{IntersectionObserverEntry/target}}
 		within the <a>root intersection rectangle</a>.
 	: <dfn>isIntersecting</dfn>
 	::
-		True if the {{IntersectionObserverEntry/target}} intersects with the
-		{{IntersectionObserver/root}}; false otherwise.  This flag makes it
+		<code>true</code> if the {{IntersectionObserverEntry/target}} intersects with the
+		{{IntersectionObserver/root}}; <code>false</code> otherwise.  This flag makes it
 		possible to distinguish between an {{IntersectionObserverEntry}} signalling
 		the transition from intersecting to not-intersecting; and an
 		{{IntersectionObserverEntry}} signalling a transition from not-intersecting
 		to intersecting with a zero-area intersection rect (as will happen with
 		edge-adjacent intersections, or when the {{IntersectionObserverEntry/boundingClientRect}}
 		has zero area).
+	: <span class="proposed"><dfn>isVisible</dfn></span>
+	::
+		<span class="proposed"><code>true</code> if the the <a>visibility</a> algorithm,
+		when run on {{IntersectionObserverEntry/target}}, returns <code>true</code></span>.
 	: <dfn>intersectionRatio</dfn>
 	::
 		If the {{IntersectionObserverEntry/boundingClientRect}} has non-zero area,
 		this will be the ratio of {{IntersectionObserverEntry/intersectionRect}} area to
 		{{IntersectionObserverEntry/boundingClientRect}} area.  Otherwise, this will be
-		1 if the {{IntersectionObserverEntry/isIntersecting}} is true, and 0 if not.
+		1 if the {{IntersectionObserverEntry/isIntersecting}} is <code>true</code>, and 0 if not.
 	: <dfn>rootBounds</dfn>
 	::
 		If {{IntersectionObserverEntry/target}} belongs to the same
@@ -442,6 +457,7 @@ dictionary IntersectionObserverInit {
 	Element?  root = null;
 	DOMString rootMargin = "0px";
 	(double or sequence&lt;double>) threshold = 0;
+	[proposed] boolean trackVisibility = false;
 };
 </pre>
 
@@ -475,6 +491,11 @@ dictionary IntersectionObserverInit {
 		on the <a>target</a>.
 
 		Note: 0.0 is effectively "any non-zero number of pixels".
+	: <span class="proposed"><dfn>trackVisibility</dfn></span>
+	::
+		<span class="proposed">A boolean indicating whether the IntersectionObserver should track <a>visibility</a>.
+		Note that tracking <a>visibility</a> is likely to be a more expensive operation
+		than tracking intersections. It is recommended that this option be used only as necessary</span>.
 </div>
 
 <h2 dfn id='intersection-observer-processing-model'>
@@ -491,7 +512,7 @@ Document</h4>
 
 Each <a>Document</a> has an
 <dfn for="Document">IntersectionObserverTaskQueued</dfn> flag
-which is initialized to false.
+which is initialized to <code>false</code>.
 
 <h4 id='element-private-slots'>
 Element</h4>
@@ -501,9 +522,10 @@ Element</h4>
 which is initialized to an empty list.
 This list holds <dfn interface>IntersectionObserverRegistration</dfn> records,
 which have an <dfn attribute for=IntersectionObserverRegistration>observer</dfn> property
-holding an {{IntersectionObserver}}
-and a <dfn attribute for=IntersectionObserverRegistration>previousThresholdIndex</dfn> property
-holding a number between -1 and the length of the observer's {{IntersectionObserver/thresholds}} property (inclusive).
+holding an {{IntersectionObserver}},
+a <dfn attribute for=IntersectionObserverRegistration>previousThresholdIndex</dfn> property
+holding a number between -1 and the length of the observer's {{IntersectionObserver/thresholds}} property (inclusive),
+<span class="proposed">and a <dfn attribute for=IntersectionObserverRegistration>previousVisibility</dfn> property holding a boolen value</span>.
 
 <h4 id='intersection-observer-private-slots'>
 IntersectionObserver</h4>
@@ -526,9 +548,9 @@ Queue an Intersection Observer Task</h4>
 To <dfn>queue an intersection observer task</dfn> for a <a>Document</a> |document|,
 run these steps:
 
-1. If |document|'s <a>IntersectionObserverTaskQueued</a> flag is set to true,
+1. If |document|'s <a>IntersectionObserverTaskQueued</a> flag is set to <code>true</code>,
 	return.
-2. Set |document|'s <a>IntersectionObserverTaskQueued</a> flag to true.
+2. Set |document|'s <a>IntersectionObserverTaskQueued</a> flag to <code>true</code>.
 3. <a>Queue a task</a> to the <a>document</a>'s <a>event loop</a> to <a>notify intersection observers</a>.
 
 <h4 id='notify-intersection-observers-algo'>
@@ -537,7 +559,7 @@ Notify Intersection Observers</h4>
 To <dfn>notify intersection observers</dfn> for a <a>Document</a> |document|,
 run these steps:
 
-1. Set |document|'s <a>IntersectionObserverTaskQueued</a> flag to false.
+1. Set |document|'s <a>IntersectionObserverTaskQueued</a> flag to <code>false</code>.
 2. Let |notify list| be a list of all {{IntersectionObserver}}s
 	whose {{IntersectionObserver/root}} is in the DOM tree of |document|.
 3. For each {{IntersectionObserver}} object |observer| in |notify list|,
@@ -587,6 +609,19 @@ run these steps:
 5. Update |intersectionRect| by intersecting it with the <a>root intersection rectangle</a>.
 6. Map |intersectionRect| to the coordinate space of the viewport of the <a>Document</a> containing the <a>target</a>.
 
+<div class="proposed">
+	<h4 id='calculate-visibility-algo'>
+	Compute whether a Target is unoccluded, untransformed, unfiltered, and opaque.</h4>
+	
+	To compute the <dfn>visibility</dfn> of a <a>target</a>, run these steps:
+	1. If the |observer|'s {{IntersectionObserver/trackVisibility}} attribute is <code>false</code>, return <code>true</code>.
+	2. If the <a>target</a> has any transform other than a 2D translation, return <code>false</code>.
+	3. If the <a>target</a> has an opacity other than 100%, return <code>false</code>.
+	4. If the <a>target</a> has any filters applied, return <code>false</code>.
+	5. If the implementation cannot guarantee that the <a>target</a> is completely unoccluded by other page content, return <code>false</code>.
+	6. Return <code>true</code>.
+</div>
+
 <h4 id='update-intersection-observations-algo'>
 Run the Update Intersection Observations Steps</h4>
 
@@ -611,23 +646,31 @@ To <dfn>run the update intersection observations steps</dfn> for a
 			algorithm on |target|.
 		5. Let |targetArea| be |targetRect|'s area.
 		6. Let |intersectionArea| be |intersectionRect|'s area.
-		7. Let |isIntersecting| be true if |targetRect| and |rootBounds| intersect or are edge-adjacent,
+		7. Let |isIntersecting| be <code>true</code> if |targetRect| and |rootBounds| intersect or are edge-adjacent,
 			even if the intersection has zero area (because |rootBounds| or |targetRect| have
-			zero area); otherwise, let |isIntersecting| be false.
+			zero area); otherwise, let |isIntersecting| be <code>false</code>.
 		8. If |targetArea| is non-zero, let |intersectionRatio| be |intersectionArea| divided by |targetArea|.<br>
-			Otherwise, let |intersectionRatio| be <code>1</code> if |isIntersecting| is true, or <code>0</code> if |isIntersecting| is false.
+			Otherwise, let |intersectionRatio| be <code>1</code> if |isIntersecting| is <code>true</code>, or <code>0</code> if |isIntersecting| is <code>false</code>.
 		9. Let |thresholdIndex| be the index of the first entry in |observer|.{{thresholds}} whose value is greater than |intersectionRatio|, or the length of |observer|.{{thresholds}} if |intersectionRatio| is greater than the last entry in |observer|.{{thresholds}}.
 		10. Let |intersectionObserverRegistration| be the {{IntersectionObserverRegistration}} record 
 			in |target|'s internal {{[[RegisteredIntersectionObservers]]}} slot
 			whose {{IntersectionObserverRegistration/observer}} property is equal to |observer|.
 		11. Let |previousThresholdIndex| be the |intersectionObserverRegistration|'s
 		    {{IntersectionObserverRegistration/previousThresholdIndex}} property.
-		12. If |thresholdIndex| does not equal |previousThresholdIndex|,
+		12. <span class="proposed">Let |isVisible| be the result of running the <a>visibility</a> algorithm on |target|.</span>
+		13. <span class="proposed">Let |previousVisibility| be the |intersectionObserverRegistration|'s
+		    {{IntersectionObserverRegistration/previousVisibility}} property.</span>
+		14. If |thresholdIndex| does not equal |previousThresholdIndex|,
+			<span class="proposed">or if |isVisible| does not equal |previousVisibility|,</span>
 			<a>queue an IntersectionObserverEntry</a>,
 			passing in |observer|, |time|, |rootBounds|,
-			|boundingClientRect|, |intersectionRect|, |isIntersecting|, and |target|.
+			|boundingClientRect|, |intersectionRect|, |isIntersecting|,
+			<span class="proposed">|isVisible|,</span> and |target|.
 		13. Assign |threshold| to |intersectionObserverRegistration|'s
 		    {{IntersectionObserverRegistration/previousThresholdIndex}} property.
+		14. <span class="proposed">Assign the result of running the <a>visibility</a> algorithm on |target}
+		    to |intersectionObserverRegistration|'s
+		    {{IntersectionObserverRegistration/previousVisibility}} property.</span>
 
 <h3 id='lifetime'>
 IntersectionObserver Lifetime</h2>
