@@ -9,13 +9,13 @@
 <pre class='metadata'>
 Title: Intersection Observer
 Status: ED
-ED: https://github.com/WICG/IntersectionObserver/
+ED: https://github.com/szager-chromium/IntersectionObserver/
 Shortname: intersection-observer
 Level: 2 (proposed)
 Editor: Stefan Zager, Google, szager@chromium.org
 Abstract: This specification describes  an API that can be used to understand the visibility and position of DOM elements ("targets") relative to a containing element or to the top-level viewport ("root"). The position is delivered asynchronously and is useful for understanding the visibility of elements and implementing pre-loading and deferred loading of DOM content.
 Group: webperf
-Repository: WICG/IntersectionObserver
+Repository: szager-chromium/IntersectionObserver
 Ignored Vars: rootMargin, docs
 </pre>
 
