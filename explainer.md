@@ -96,7 +96,7 @@ var observer = new IntersectionObserver(
   { threshold: [minimumUnclippedArea] } 
 );
 
-var theButton = document.querySelector('#payButton);
+var theButton = document.querySelector('#payButton');
 observer.observe(theButton);
 ```
 
