@@ -51,10 +51,13 @@ The information provided by this API, combined with the default viewport query, 
 
 ```html
 <!DOCTYPE html>
+<!-- This is the iframe document. -->
 <button id="payButton" onclick="payButtonClicked()">Pay Money Now</button>
 ```
 
 ```js
+// This is code running in the iframe.
+
 // An element is considered visible if it's at least 80% unclipped.
 var minimumUnclippedArea = 0.8;
 
