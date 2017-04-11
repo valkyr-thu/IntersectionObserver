@@ -47,60 +47,54 @@ The expected use of this API is that you create an IntersectionObserver with a r
 
 ## Element Visibility
 
-The information provided by this API, combined with the default viewport query, allows a developer to easily understand when an element comes into, or passes out of, view. Here's how one might implement the IAB's "50% visible for more than a continuous second" policy for counting an ad impression:
+The information provided by this API, combined with the default viewport query, allows a developer to easily understand when an element comes into, or passes out of, view. Here's how one might implement validation of input events for an embedded element, to ensure that the target element has been fully visible for a minimum duration when the event is received.  Note that all of the code runs in the embedded iframe's execution context; it's not necessary to run any code in the top-level embedding document.
 
 ```html
-<!-- the host document includes (or generates) an iframe to contain the ad -->
-<iframe id="theAd"></iframe>
-<!-- it also includes ad script -->
-<script src="//cdn.example.com/ads.js" async></script>
+<!DOCTYPE html>
+<button id="payButton" onclick="payButtonClicked()">Pay Money Now</button>
 ```
 
 ```js
-// ads.js
+// An element is considered visible if it's at least 80% unclipped.
+var minimumUnclippedArea = 0.8;
 
-function logImpressionToServer() { /* ... */ }
+// An element must be visible for at least 0.5 seconds prior to an input event
+// for the input event to be considered valid.
+var minimumVisibleDuration = 500;
 
-function isVisible(boundingClientRect, intersectionRect) {
-  return ((intersectionRect.width * intersectionRect.height) /
-          (boundingClientRect.width * boundingClientRect.height) >= 0.5);
-}
-
-function visibleTimerCallback(element, observer) {
-  delete element.visibleTimeout;
-  // Process any pending observations
-  processChanges(observer.takeRecords());
-  if ('isVisible' in element) {
-    delete element.isVisible;
-    logImpressionToServer();
-    observer.unobserve(element);
+function payButtonClicked(evt) {
+  if (evt.currentTarget.visibleSince &&
+      performance.now() - evt.currentTarget.visibleSince >= minimumVisibleDuation) {
+    acceptClick();
+  } else {
+    rejectClick();
   }
 }
 
+function targetIsVisible(change) {
+  return change.isIntersecting &&
+         change.isVisible &&
+         change.intersectionRatio >= minimumUnclippedArea;
+}
+
 function processChanges(changes) {
-  changes.forEach(function(changeRecord) {
-    var element = changeRecord.target;
-    element.isVisible = isVisible(changeRecord.boundingClientRect, changeRecord.intersectionRect);
-    if ('isVisible' in element) {
-      // Transitioned from hidden to visible
-      element.visibleTimeout = setTimeout(visibleTimerCallback, 1000, element, observer);
-    } else {
-      // Transitioned from visible to hidden
-      if ('visibleTimeout' in element) {
-        clearTimeout(element.visibleTimeout);
-        delete element.visibleTimeout;
-      }
+  let lastChange = changes.pop();  // We're only interested in the most recent change.
+  if (targetIsVisible(lastChange)) {
+    if (!lastChange.target.visibleSince) {
+      lastChange.target.visibleSince = lastChange.time;
     }
-  });
+  } else {
+    delete lastChange.target.visibleSince;
+  }
 }
 
 var observer = new IntersectionObserver(
   processChanges,
-  { threshold: [0.5] } 
+  { threshold: [minimumUnclippedArea] } 
 );
 
-var theAd = document.querySelector('#theAd');
-observer.observe(theAd);
+var theButton = document.querySelector('#payButton);
+observer.observe(theButton);
 ```
 
 If more granular information about visibility is needed, the above code may be modified to use a sequence of threshold values.  This higher rate of delivery might seem expensive at first glance, but note the power and performance advantages over current practice:
