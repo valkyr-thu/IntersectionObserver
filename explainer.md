@@ -2,7 +2,9 @@
 
 ## What's All This About?
 
-This repo outlines an API that can be used to understand movement of DOM elements relative to another element or the browser top level viewport. Changes are delivered asynchronously and are useful for understanding the visibility of elements, managing pre-loading of DOM and data, as well as deferred loading of "below the fold" page content.
+~~This repo outlines an API that can be used to understand movement of DOM elements relative to another element or the browser top level viewport. Changes are delivered asynchronously and are useful for understanding the visibility of elements, managing pre-loading of DOM and data, as well as deferred loading of "below the fold" page content.~~
+
+**This spec proposal describes an API which reports changes in the position and visibility of DOM elements ("targets") relative to a "root", which may be either a containing element ("explicit root"), or the top-level viewport ("implicit root"). The changes are detected during the document lifecycle and reported via an asynchronous callback. It is useful for efficiently implementing deferred loading of DOM content (e.g., "infinite" scrolling lists) and other dynamic behaviors based on position within a scrolling viewport. It can also provide a strong guarantee that a particular target -- which may include content inside an iframe -- is actually visible on screen.**
 
 ## Observing Position
 
@@ -20,30 +22,33 @@ These use-cases have several common properties:
   1. They do not impose hard latency requirements; that is to say, the information can be delayed somewhat asynchronously (e.g. from another thread) without penalty.
   1. They are poorly supported by nearly all combinations of existing web platform features, requiring extraordinary developer effort despite their widespread use.
 
-A notable non-goal is pixel-accurate information about what was actually displayed (which can be quite difficult to obtain efficiently in certain browser architectures in the face of filters, webgl, and other features). In all of these scenarios the information is useful even when delivered at a slight delay and without perfect compositing-result data.
+~~A notable non-goal is pixel-accurate information about what was actually displayed (which can be quite difficult to obtain efficiently in certain browser architectures in the face of filters, webgl, and other features). In all of these scenarios the information is useful even when delivered at a slight delay and without perfect compositing-result data.~~
 
 Given the opportunity to reduce CPU use, increase battery life, and eliminate jank it seems like a new API to simplify answering these queries is a prudent addition to the web platform.
+
+## Observing Visibility
+
+**Even when a target element is known to be within the browser windows' scrolling viewport, it may still be covered ("occluded") by other content on the page; or it may be altered by an inherited filter or transform. Unlike position calculation -- which can be accomplished, albeit inefficiently, using existing web API's -- there is no existing reliable way to detect occlusion.**
 
 ### Proposed API
 
 ```js
 function callback(entries) {
   entries.forEach(function(entry) {
-    if (isInterseting(entry.intersectionRect))
+    if (entry.isVisible && entry.intersectionRatio > 0.5)
       doSomething();
   });
 };
-var root = document.getElementById('root');
 var target = document.getElementById('target');
 var options_dict = {
   thresholds: [0.0, 0.3, 0.7, 1.0],
-  root: root
+  trackVisibility: true
 };
 var observer = new IntersectionObserver(callback, options_dict);
 observer.observe(target);
 ```
 
-The expected use of this API is that you create an IntersectionObserver with a root element; then observe one or more elements that are descendants of the root.  The callback will be fired whenever any of the observed elements' ratio of (area of observed element's intersection with root / total area of observed element) crosses any of the observer's thresholds (i.e., transitions from less than the threshold to greater, or vice versa).  The callback includes change records for all observed elements for which a threshold crossing has occurred since the last callback.
+The expected use of this API is that you create an IntersectionObserver with a root node; then observe one or more elements that are descendants of the root. If unspecified, the root node defaults to the top-level document in the browser window. The callback will be fired whenever any of the observed elements' ratio of (area of observed element's intersection with root / total area of observed element) crosses any of the observer's thresholds (i.e., transitions from less than the threshold to greater, or vice versa). If the trackVisibility option is given, then changes in the visibility of the target will also trigger a callback.  The callback includes change records for all observed elements for which a threshold crossing or visibility change has occurred since the last callback.
 
 ## Element Visibility
 
@@ -61,31 +66,23 @@ The information provided by this API, combined with the default viewport query, 
 
 function logImpressionToServer() { /* ... */ }
 
-function isVisible(boundingClientRect, intersectionRect) {
-  return ((intersectionRect.width * intersectionRect.height) /
-          (boundingClientRect.width * boundingClientRect.height) >= 0.5);
-}
-
 function visibleTimerCallback(element, observer) {
   delete element.visibleTimeout;
-  // Process any pending observations
-  processChanges(observer.takeRecords());
-  if ('isVisible' in element) {
-    delete element.isVisible;
-    logImpressionToServer();
-    observer.unobserve(element);
-  }
+  delete element.isVisible;
+  logImpressionToServer();
 }
 
 function processChanges(changes) {
   changes.forEach(function(changeRecord) {
-    var element = changeRecord.target;
-    element.isVisible = isVisible(changeRecord.boundingClientRect, changeRecord.intersectionRect);
-    if ('isVisible' in element) {
+    let element = changeRecord.target;
+    let isVisible = (changeRecord.isVisible && changeRecord.isIntersecting);
+    if (changeRecord.isVisible && changeRecord.intersectionRatio >= 0.5) {
       // Transitioned from hidden to visible
+      element.isVisible = true;
       element.visibleTimeout = setTimeout(visibleTimerCallback, 1000, element, observer);
     } else {
       // Transitioned from visible to hidden
+      delete element.isVisible;
       if ('visibleTimeout' in element) {
         clearTimeout(element.visibleTimeout);
         delete element.visibleTimeout;
@@ -94,16 +91,16 @@ function processChanges(changes) {
   });
 }
 
-var observer = new IntersectionObserver(
+let observer = new IntersectionObserver(
   processChanges,
   { threshold: [0.5] } 
 );
 
-var theAd = document.querySelector('#theAd');
+let theAd = document.querySelector('#theAd');
 observer.observe(theAd);
 ```
 
-If more granular information about visibility is needed, the above code may be modified to use a sequence of threshold values.  This higher rate of delivery might seem expensive at first glance, but note the power and performance advantages over current practice:
+If more granular information about position is needed, the above code may be modified to use a sequence of threshold values.  This higher rate of delivery might seem expensive at first glance, but note the power and performance advantages over current practice:
 
   - No scroll handlers need be installed/run (a frequent source of jank).
   - Off-screen ads do not deliver any events or set any timers until they come into view.
