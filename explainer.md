@@ -30,6 +30,13 @@ Given the opportunity to reduce CPU use, increase battery life, and eliminate ja
 
 **Even when a target element is known to be within the browser windows' scrolling viewport, it may still be covered ("occluded") by other content on the page; or it may be altered by an inherited filter or transform. Unlike position calculation -- which can be accomplished, albeit inefficiently, using existing web API's -- there is no existing reliable way to detect occlusion.**
 
+**Occlusion is reported as a simple boolean variable indicating "content is guaranteed to be visible" or "content is not guaranteed to be visible." A notable detail of the spec is that occlusion detection is not guaranteed to be 100% accurate: implementations may vary in their in their approach and accuracy, and a conforming implementation may report false negatives (i.e., reporting a target as "possibly occluded" when it's actually visible); but it may never report a false positive.  At a minimum, a conforming spec must guarantee that a target reported as visible...**
+
+* **has no transform other than a 2D translate.**
+* **has an opacity of 1.0.**
+* **has no filters applied.**
+* **is not covered by any other page content with an opacity greater than 0.**
+
 ### Proposed API
 
 ```js
